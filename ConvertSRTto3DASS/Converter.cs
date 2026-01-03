@@ -156,7 +156,7 @@ namespace ConvertSRTto3DASS
 
         //TODO: Make this human readable
         //TODO: Add adjustable parameters
-        private static string CreateStandardStyle(int width = 1920, int depthOffset = 10)
+        private static string CreateStandardStyle()
         {
             int offset = (int)Math.Floor((double)width / 2) - depthOffset;
 
