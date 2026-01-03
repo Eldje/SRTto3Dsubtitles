@@ -1,9 +1,12 @@
-﻿using System;
+﻿using CommandLine;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using static System.Net.WebRequestMethods;
+using File = System.IO.File;
 
 //SSA/ASS specification v4+ http://www.tcax.org/docs/ass-specs.htm
 //SRT (SubRip) specification https://en.wikipedia.org/wiki/SubRip
@@ -12,17 +15,62 @@ namespace ConvertSRTto3DASS
 {
     class Converter
     {
+        internal static string srtFilePath;
+        internal static int width;
+        internal static int height;
+        internal static int depthOffset;
+        internal static int fontSize;
+
+        // On définit une classe pour stocker les paramètres
+        public class Options
+        {
+            [Option('f', "srtFilePath", Required = true, HelpText = "Chemin du fichier .srt")]
+            public string SrtFilePath { get; set; }
+
+            [Option('w', "width", Required = false, HelpText = "Résolution horizontale du film")]
+            public int? Width { get; set; }
+
+            [Option('h', "heigh", Required = false, HelpText = "Résolution verticale du film")]
+            public int? Height { get; set; }
+
+            [Option('d', "dephtOffset", Required = false, HelpText = "Offset de profondeur")]
+            public int? DepthOffset { get; set; }
+
+            [Option('s', "size", Required = false, HelpText = "Taille de la police")]
+            public int? Size { get; set; }
+        }
 
         static void Main(string[] args)
         {
+            Parser.Default.ParseArguments<Options>(args)
+                .WithParsed(RunOptions)
+                .WithNotParsed(HandleParseError);
+        }
 
-            var extracted = ExtractSubFromSRT(args[0]);
+        // Cette méthode est appelée si le parsing réussit
+        static void RunOptions(Options opts)
+        {
+            // 4. Initialisation des variables globales
+            srtFilePath = opts.SrtFilePath;
+            width = opts.Width ?? 1920;
+            height = opts.Height ?? 1080;
+            depthOffset = opts.DepthOffset ?? 10;
+            fontSize = opts.Size ?? 50;
+
+            // Appel de la logique principale de votre application
+            var extracted = ExtractSubFromSRT();
+            var header = CreateHeader();
             var style = CreateStandardStyle();
-            var header = CreateHeader(args[0]);
             var events = ProcessSubs(extracted);
 
             var finished = "[Script Info]\n" + header + "\n\n[V4+ Styles]\n" + style + "\n\n[Events]\n" + events;
-            File.WriteAllText(Path.GetFileNameWithoutExtension(args[0]) + ".ass", finished, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+            File.WriteAllText(Path.GetFileNameWithoutExtension(srtFilePath) + ".ass", finished, new UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+        }
+        static void HandleParseError(System.Collections.Generic.IEnumerable<Error> errs)
+        {
+            // En cas d'erreur (ex: paramètre obligatoire manquant), 
+            // la bibliothèque affiche automatiquement l'aide.
+            Console.WriteLine("Erreur lors de la lecture des arguments.");
         }
 
         //Is there a better way to do it?
@@ -60,7 +108,6 @@ namespace ConvertSRTto3DASS
 
                 line = color.Replace(line, "{\\c&" + color_str + "&}");
 
-                
             }
 
             return removeFormatting(line);
@@ -109,8 +156,10 @@ namespace ConvertSRTto3DASS
 
         //TODO: Make this human readable
         //TODO: Add adjustable parameters
-        private static string CreateStandardStyle()
+        private static string CreateStandardStyle(int width = 1920, int depthOffset = 10)
         {
+            int offset = (int)Math.Floor((double)width / 2);
+
             string style = "Format: " +
                 "Name, " +
                 "Fontname, " +
@@ -139,7 +188,7 @@ namespace ConvertSRTto3DASS
                 "Style: " +
                 "Right," +
                 "Arial," +
-                "16," +
+                fontSize + "," +
                 "&Hffffff," +
                 "&Hffffff," +
                 "&H0," +
@@ -156,16 +205,16 @@ namespace ConvertSRTto3DASS
                 "1," +
                 "0," +
                 "2," +
-                "192," +
+                offset + "," +
                 "0," +
-                "10," +
+                depthOffset + "," +
                 "0\n" +
 
 
                 "Style: " +
                 "Left," +
                 "Arial," +
-                "16," +
+                fontSize + "," +
                 "&Hffffff," +
                 "&Hffffff," +
                 "&H0," +
@@ -183,22 +232,22 @@ namespace ConvertSRTto3DASS
                 "0," +
                 "2," +
                 "0," +
-                "192 ," +
-                "10," +
+                offset + "," +
+                depthOffset + "," +
                 "0";
             return style;
         }
 
         //TODO: create a system where you can actually give paramaters to it
-        private static string CreateHeader(string file, int resY = 288, int resX = 384)
+        private static string CreateHeader()
         {
-            var name = Path.GetFileNameWithoutExtension(file);
+            var name = Path.GetFileNameWithoutExtension(srtFilePath);
             string scriptinfo = "; Generated by ConvertSRTto3D\n" +
                 "Title: " + name + "\n" +
                 "ScriptType: v4.00+\n" +
                 "Collisions: Normal\n" +
-                "PlayResX: " + resX + "\n" +
-                "PlayResY: " + resY + "\n" +
+                "Playwidth: " + width + "\n" +
+                "Playheight: " + height + "\n" +
                 "ScaledBorderAndShadow: yes";
             return scriptinfo;
         }
@@ -211,7 +260,7 @@ namespace ConvertSRTto3DASS
                 string text = reader.ReadToEnd();
 
                 // If UTF-8 decoding produced replacement character <?>, fallback to CP1252
-                if (text.Contains('\uFFFD')) 
+                if (text.Contains('\uFFFD'))
                     text = File.ReadAllText(path, Encoding.GetEncoding(1252));
 
                 return text;
@@ -221,7 +270,7 @@ namespace ConvertSRTto3DASS
         //start, end, text, format <- tuple format
         //Note - I want to change the tuple as format bit is useless as the data is carried in the text field for both .srt and .ass
         //but I could reprepose it for any positional data
-        private static List<Tuple<string, string, string, string>> ExtractSubFromSRT(string file)
+        private static List<Tuple<string, string, string, string>> ExtractSubFromSRT()
         {
 
             var converted = new List<Tuple<string, string, string, string>>();
@@ -229,9 +278,9 @@ namespace ConvertSRTto3DASS
             var timestamp_start = "";
             var timestamp_end = "";
             var subtitles = "";
-            string srt = ReadTextSmart(file);
+            string srt = ReadTextSmart(srtFilePath);
 
-            
+
             int dialogNumber = 1; // Which dialog we are on
             int dialogLine = 0; // Which line of the dialog block we are on 
             int linecounter = 0; //Where we are in the .srt, meant for debugging
