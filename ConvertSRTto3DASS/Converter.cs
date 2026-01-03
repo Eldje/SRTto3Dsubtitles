@@ -189,8 +189,8 @@ namespace ConvertSRTto3DASS
                 "Right," +
                 "Arial," +
                 fontSize + "," +
-                "&H00ffffff," +
-                "&H0000ffff," +
+                "&H00FFFFFF," +
+                "&H0000FFFF," +
                 "&H00000000," +
                 "&H00000000," +
                 "0," +
@@ -215,8 +215,8 @@ namespace ConvertSRTto3DASS
                 "Left," +
                 "Arial," +
                 fontSize + "," +
-                "&H00ffffff," +
-                "&H0000ffff," +
+                "&H00FFFFFF," +
+                "&H0000FFFF," +
                 "&H00000000," +
                 "&H00000000," +
                 "0," +
